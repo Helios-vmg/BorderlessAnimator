@@ -78,7 +78,7 @@ void LoadedImage::compute_average_color(QImage img){
 }
 
 void LoadedImage::assign_to_QLabel(QLabel &label){
-	label.setPixmap(this->image);
+	//label.setPixmap(this->image);
 }
 
 QImage LoadedImage::get_QImage() const{
@@ -104,8 +104,8 @@ QImage LoadedAnimation::get_QImage() const{
 	return this->animation->currentImage();
 }
 
-std::shared_ptr<LoadedGraphics> LoadedGraphics::create(ImageViewerApplication &app, const QString &path){
-	std::shared_ptr<LoadedGraphics> ret;
+std::unique_ptr<LoadedGraphics> LoadedGraphics::create(ImageViewerApplication &app, const QString &path){
+	std::unique_ptr<LoadedGraphics> ret;
 	if (app.is_animation(path))
 		ret.reset(new LoadedAnimation(app, path));
 	else

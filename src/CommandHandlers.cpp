@@ -12,11 +12,7 @@ Distributed under a permissive license. See COPYING.txt for details.
 void ImageViewerApplication::handle_load(const QStringList &args){
 	if (args.size() < 4)
 		return;
-	auto &path = args[2];
-	auto &name = args[3];
-	auto p = std::make_shared<MainWindow>(*this, path);
-	if (!p->is_null())
-		this->add_window(name.toStdString(), p);
+	this->main_window->load(args[2], args[3].toStdString());
 }
 
 void ImageViewerApplication::handle_scale(const QStringList &args){
@@ -28,10 +24,10 @@ void ImageViewerApplication::handle_scale(const QStringList &args){
 	auto scale = scale_string.toDouble(&ok);
 	if (!ok)
 		return;
-	auto it = this->windows_by_name.find(name);
-	if (it == this->windows_by_name.end())
+	auto window = this->main_window->get_window(name);
+	if (!window)
 		return;
-	it->second->set_scale(scale);
+	window->set_scale(scale);
 }
 
 void ImageViewerApplication::handle_setorigin(const QStringList &args){
@@ -47,10 +43,10 @@ void ImageViewerApplication::handle_setorigin(const QStringList &args){
 	auto y = y_string.toInt(&ok);
 	if (!ok)
 		return;
-	auto it = this->windows_by_name.find(name);
-	if (it == this->windows_by_name.end())
+	auto window = this->main_window->get_window(name);
+	if (!window)
 		return;
-	it->second->set_origin(x, y);
+	window->set_origin(x, y);
 }
 
 bool parse_move_string(int &dst, bool &relative, const QString &s){
@@ -114,11 +110,10 @@ void ImageViewerApplication::handle_move(const QStringList &args){
 	if (!parse_move_string(y, yrel, y_string))
 		return;
 
-	auto it = this->windows_by_name.find(name);
-	if (it == this->windows_by_name.end())
+	auto window = this->main_window->get_window(name);
+	if (!window)
 		return;
-	auto &window = *it->second;
-	auto pos = window.pos();
+	auto pos = window->pos();
 	if (xrel)
 		pos.setX(pos.x() + x);
 	else
@@ -127,7 +122,7 @@ void ImageViewerApplication::handle_move(const QStringList &args){
 		pos.setY(pos.y() + y);
 	else
 		pos.setY(y);
-	it->second->move_by_command(pos);
+	window->move_by_command(pos);
 }
 
 void ImageViewerApplication::handle_rotate(const QStringList &args){
@@ -140,16 +135,15 @@ void ImageViewerApplication::handle_rotate(const QStringList &args){
 	if (!parse_rotate_string(theta, thetarel, theta_string))
 		return;
 
-	auto it = this->windows_by_name.find(name);
-	if (it == this->windows_by_name.end())
+	auto window = this->main_window->get_window(name);
+	if (!window)
 		return;
-	auto &window = *it->second;
-	auto rotation = window.get_rotation();
+	auto rotation = window->get_rotation();
 	if (thetarel)
 		rotation += theta;
 	else
 		rotation = theta;
-	window.set_rotation(rotation);
+	window->set_rotation(rotation);
 }
 
 void ImageViewerApplication::handle_animmove(const QStringList &args){
@@ -167,11 +161,10 @@ void ImageViewerApplication::handle_animmove(const QStringList &args){
 	if (!ok)
 		return;
 
-	auto it = this->windows_by_name.find(name);
-	if (it == this->windows_by_name.end())
+	auto window = this->main_window->get_window(name);
+	if (!window)
 		return;
-	auto &window = *it->second;
-	window.anim_move(x, y, speed);
+	window->anim_move(x, y, speed);
 }
 
 void ImageViewerApplication::handle_animrotate(const QStringList &args){
@@ -183,11 +176,10 @@ void ImageViewerApplication::handle_animrotate(const QStringList &args){
 	if (!ok)
 		return;
 
-	auto it = this->windows_by_name.find(name);
-	if (it == this->windows_by_name.end())
+	auto window = this->main_window->get_window(name);
+	if (!window)
 		return;
-	auto &window = *it->second;
-	window.anim_rotate(speed);
+	window->anim_rotate(speed);
 }
 
 void ImageViewerApplication::handle_loadscript(const QStringList &){

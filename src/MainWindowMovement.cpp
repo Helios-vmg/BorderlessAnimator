@@ -15,13 +15,13 @@ void set_flags(bool &left, bool &right, bool &middle, const QMouseEvent &ev){
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *ev){
+	return;
 	MouseEvent mme(*ev);
 	this->not_moved = false;
 
 	if (mme.button_sum > 1)
 		return;
 
-	this->first_label_pos = this->ui->label->pos();
 	if (mme.left){
 		this->reset_left_mouse(mme);
 	}else if (mme.right){
@@ -38,6 +38,7 @@ void MainWindow::reset_left_mouse(const MouseEvent &ev){
 }
 
 void MainWindow::mouseReleaseEvent(QMouseEvent *ev){
+	return;
 	if (this->not_moved)
 		this->show_context_menu(ev);
 	this->not_moved = false;
@@ -98,6 +99,7 @@ bool MainWindow::set_cursor_flags(const MouseEvent &ev){
 	}
 
 void MainWindow::mouseMoveEvent(QMouseEvent *ev){
+	return;
 	MouseEvent mme(*ev);
 	if (!this->set_cursor_flags(mme))
 		return;
@@ -121,16 +123,12 @@ void MainWindow::mouseMoveEvent(QMouseEvent *ev){
 				this->set_cursor_flags(copy);
 			}else{
 				this->set_window_rect(rect);
-				this->ui->label->move(pos);
-				FTEMP(x, X, width, Width);
-				FTEMP(y, Y, height, Height);
 			}
 		}
 	}else if (mme.right){
 		auto new_position = this->first_label_pos + mouse_pos - this->first_mouse_pos;
 		if (this->move_image(new_position)){
 			this->first_mouse_pos = mouse_pos;
-			this->first_label_pos = this->ui->label->pos();
 		}
 	}
 }
@@ -181,7 +179,7 @@ bool MainWindow::compute_resize(QPoint &out_label_pos, QRect &out_window_rect, Q
 			rect.setBottom(ds.bottom());
 	}
 
-	auto label_rect = this->ui->label->rect();
+	QRect label_rect;
 
 	auto border_size = this->window_state->get_border_size();
 	if ((std::uint32_t)rect.width() < border_size){
@@ -238,7 +236,7 @@ void MainWindow::move_window(const QPoint &requested_position, const QPoint &mou
 
 bool MainWindow::move_image(const QPoint &_new_position){
 	auto new_position = _new_position;
-	auto label_size = this->ui->label->size();
+	QSize label_size;
 	auto window_size = this->size();
 	bool refresh = false;
 
@@ -269,7 +267,6 @@ bool MainWindow::move_image(const QPoint &_new_position){
 	if (new_label_rect.bottom() > allowed_region.bottom())
 		new_label_rect.moveBottom(allowed_region.bottom());
 
-	this->ui->label->move(new_label_rect.topLeft());
 	return refresh;
 }
 
@@ -318,15 +315,7 @@ QPoint MainWindow::compute_movement(const QPoint &_new_position, const QPoint &m
 	return new_position;
 }
 
-void MainWindow::reposition_window(bool do_not_enlarge){
-	this->resize_to_max(do_not_enlarge);
-	if (this->window_state->get_fullscreen())
-		this->resolution_to_window_size();
-	this->reposition_image();
-}
-
 void MainWindow::reposition_image(){
-	this->move_image(this->ui->label->pos());
 }
 
 MainWindow::ResizeMode MainWindow::get_resize_mode(const QPoint &pos){

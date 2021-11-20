@@ -17,30 +17,28 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include <cassert>
 #include "GenericException.h"
 
-MainWindow::MainWindow(ImageViewerApplication &app, const QString &path, QWidget *parent):
+MainWindow::MainWindow(ImageViewerApplication &app, const QRect &geom, QWidget *parent):
 		QMainWindow(parent),
 		ui(new Ui::MainWindow),
 		app(&app){
 	this->init(false);
-	this->open_path_and_display_image(path);
+	this->setGeometry(geom);
+	this->origin = -geom.topLeft();
+	//this->open_path_and_display_image(path);
 	this->setAttribute(Qt::WA_TranslucentBackground);
-	this->ui->checkerboard->hide();
-	this->ui->solid->hide();
+	this->show();
 }
 
 void MainWindow::init(bool restoring){
 	if (!this->window_state)
 		this->window_state = std::make_shared<WindowState>();
-	this->moving_forward = true;
 	this->not_moved = false;
 	this->window_state->set_zoom(1);
 	this->window_state->set_fullscreen_zoom(1);
-	this->color_calculated = false;
 	this->window_state->set_fullscreen(false);
 	this->ui->setupUi(this);
 	this->setWindowFlags(this->windowFlags() | Qt::FramelessWindowHint);
 	this->reset_settings();
-	this->setup_backgrounds();
 
 	this->set_desktop_size();
 	assert(this->desktop_sizes.size());
@@ -62,8 +60,6 @@ void MainWindow::init(bool restoring){
 
 	this->setMouseTracking(true);
 	this->ui->centralWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-
-	connect(this->ui->label, SIGNAL(transform_updated()), this, SLOT(label_transform_updated()));
 }
 
 int MainWindow::get_current_desktop_number(){
@@ -75,8 +71,6 @@ int MainWindow::get_current_desktop_number(){
 
 void MainWindow::set_current_desktop_and_fix_positions_by_window_position(int old_desktop){
 	this->current_desktop = this->get_current_desktop_number();
-	if (this->current_desktop != old_desktop)
-		this->fix_positions_and_zoom();
 }
 
 void MainWindow::set_desktop_size(){
@@ -97,25 +91,6 @@ void MainWindow::set_desktop_size(int screen){
 	this->screen_sizes[screen] = this->app->desktop()->screenGeometry(screen);
 }
 
-void MainWindow::save_image_pos(bool force){
-	if (this->window_state->get_fullscreen() && !force)
-		return;
-	auto p = this->ui->label->pos();
-	qDebug() << "Saving image position at " << p;
-	this->image_pos = p;
-}
-
-void MainWindow::restore_image_pos(){
-	QPoint p;
-	if (this->image_pos){
-		p = *this->image_pos;
-		qDebug() << "Restoring image position: " << p;
-	}else{
-		qDebug() << "Saved image position in unset state. Restoring to " << p;
-	}
-	this->ui->label->move(p);
-}
-
 void MainWindow::clear_image_pos(){
 	qDebug() << "Clearing image position.";
 	this->image_pos.clear();
@@ -131,182 +106,7 @@ int area(const QSize &size){
 
 #define IS_WIDER >
 
-MainWindow::ZoomResult MainWindow::compute_zoom(int override_rotation){
-	auto screen_number = this->get_current_desktop_number();
-	auto desktop_size = this->desktop_sizes[screen_number].size();
-	if (this->window_state->get_fullscreen())
-		desktop_size = this->screen_sizes[screen_number].size();
-
-	auto image_size = this->displayed_image->get_size();
-	double desktop_ratio = ratio(desktop_size);
-
-	auto zoom_mode = this->get_current_zoom_mode();
-	auto old_transform = this->ui->label->get_transform();
-	if (override_rotation < 0){
-		if (this->current_zoom_mode_is_auto_rotation()){
-			auto res0 = this->compute_zoom(0);
-			auto res1 = this->compute_zoom(1);
-			switch (zoom_mode){
-				case ZoomMode::AutoRotFit:
-					this->ui->label->override_rotation(area(res1.label_size) > area(res0.label_size) ? -90 : 0);
-					break;
-				case ZoomMode::AutoRotFill:
-					this->ui->label->override_rotation(area(res1.label_size) < area(res0.label_size) ? -90 : 0);
-					break;
-			}
-		}
-	}else
-		this->ui->label->override_rotation(override_rotation ? -90 : 0);
-
-	auto label_size = this->ui->label->compute_size_no_zoom(image_size);
-	double label_ratio = ratio(label_size);
-
-	auto zoom = this->get_current_zoom();
-	switch (zoom_mode){
-		case ZoomMode::Normal:
-			zoom = 1;
-			break;
-		case ZoomMode::Locked:
-			break;
-		case ZoomMode::AutoFit:
-		case ZoomMode::AutoRotFit:
-			if (label_ratio IS_WIDER desktop_ratio)
-				zoom = (double)desktop_size.width() / (double)label_size.width();
-			else
-				zoom = (double)desktop_size.height() / (double)label_size.height();
-			break;
-		case ZoomMode::AutoFill:
-		case ZoomMode::AutoRotFill:
-			if (desktop_ratio IS_WIDER label_ratio)
-				zoom = (double)desktop_size.width() / (double)label_size.width();
-			else
-				zoom = (double)desktop_size.height() / (double)label_size.height();
-			break;
-	}
-	label_size = this->ui->label->compute_size(image_size, zoom);
-	if (override_rotation >= 0)
-		this->ui->label->set_transform(old_transform);
-	return { zoom, label_size };
-}
-
 void MainWindow::set_zoom(){
-	this->set_current_zoom(this->compute_zoom().zoom);
-}
-
-void MainWindow::apply_zoom(bool first_display, double old_zoom){
-	auto label_pos = this->ui->label->pos();
-#ifdef _DEBUG
-	qDebug() << "MainWindow::apply_zoom(): label_pos = " << label_pos;
-#endif
-	auto center = to_QPoint(this->size()) / 2;
-#ifdef _DEBUG
-	qDebug() << "MainWindow::apply_zoom(): center = " << center;
-#endif
-	auto center_at = center - label_pos;
-#ifdef _DEBUG
-	qDebug() << "MainWindow::apply_zoom(): center_at = " << center_at;
-#endif
-
-	auto zoom = this->get_current_zoom();
-#ifdef _DEBUG
-	qDebug() << "MainWindow::apply_zoom(): zoom = " << zoom;
-#endif
-
-	this->display_image_in_label(this->displayed_image, first_display);
-
-	if (zoom != 1){
-		auto new_location = center - center_at * (zoom / old_zoom);
-#ifdef _DEBUG
-		qDebug() << "MainWindow::apply_zoom(): center - center_at * (zoom / old_zoom) = "
-			<< center << " - " << center_at << " * (" << zoom << " / " << old_zoom << ") = " << new_location;
-#endif
-
-		if (first_display && !this->app->get_center_when_displayed()){
-			if (new_location.x() < 0)
-				new_location.setX(0);
-			if (new_location.y() < 0)
-				new_location.setY(0);
-		}
-
-		this->move_image(new_location);
-	}
-}
-
-void MainWindow::change_zoom(bool in){
-	auto zoom = this->get_current_zoom();
-	auto old_zoom = zoom;
-	zoom *= in ? 1.25 : (1.0 / 1.25);
-	this->set_current_zoom(zoom);
-	this->apply_zoom(false, old_zoom);
-	if (this->current_zoom_mode_is_auto())
-		this->set_current_zoom_mode(ZoomMode::Normal);
-}
-
-void MainWindow::setup_backgrounds(){
-	{
-		auto widget = this->ui->checkerboard;
-		QPalette palette = widget->palette();
-		QImage alpha(":/alpha.png");
-		if (alpha.isNull())
-			throw GenericException("Resource not found: \"alpha.png\"");
-		palette.setBrush(QPalette::Window, QBrush(alpha));
-		widget->setPalette(palette);
-	}
-	this->set_solid(Qt::black);
-	this->ui->checkerboard->hide();
-	this->ui->solid->hide();
-	this->ui->checkerboard->move(0, 0);
-	this->ui->solid->move(0, 0);
-}
-
-void MainWindow::set_solid(const QColor &col){
-	QPalette palette = this->ui->solid->palette();
-	palette.setBrush(QPalette::Window, QBrush(col));
-	this->ui->solid->setPalette(palette);
-}
-
-void MainWindow::set_background(bool force){
-	if (!this->window_state->get_using_checkerboard_pattern_updated() && !force)
-		return;
-
-	QWidget *p1 = this->ui->checkerboard;
-	QWidget *p2 = this->ui->solid;
-	if (!this->window_state->get_using_checkerboard_pattern() && this->displayed_image){
-		this->set_solid(this->displayed_image->get_background_color());
-		std::swap(p1, p2);
-	}
-	p1->show();
-	p2->hide();
-	this->window_state->set_using_checkerboard_pattern_updated(false);
-}
-
-void MainWindow::set_background_sizes(){
-	QRect wr(QPoint(0, 0), this->size());
-	auto &label = this->ui->label;
-	auto lr = label->get_geometry();
-	lr &= wr;
-	this->ui->checkerboard->setGeometry(lr);
-	this->ui->solid->setGeometry(lr);
-}
-
-void MainWindow::show_nothing(){
-	qDebug() << "MainWindow::show_nothing()";
-	this->displayed_image.reset();
-	this->resize(800, 600);
-	this->ui->label->move(0, 0);
-	this->ui->label->resize(this->size());
-	this->window_state->reset_border_size();
-	this->set_background_sizes();
-	this->resize_to_max();
-}
-
-void MainWindow::resize_to_max(bool do_not_enlarge){
-	auto &label = this->ui->label;
-	auto label_size = label->get_size();
-	label->resize(label_size);
-	auto rect = this->geometry();
-	rect.setSize(label_size);
-	this->set_window_rect(rect);
 }
 
 double MainWindow::get_current_zoom() const{
@@ -345,75 +145,6 @@ public:
 	}
 };
 
-bool MainWindow::open_path_and_display_image(QString path){
-	ElapsedTimer et((QString)"open_path_and_display_image(" + path + ")");
-	auto &label = this->ui->label;
-	auto li = LoadedGraphics::create(*this->app, path);
-	qDebug() << path;
-
-	QString current_filename;
-
-	QString current_directory;
-	split_path(current_directory, current_filename, path);
-	this->window_state->set_current_directory(current_directory);
-	this->window_state->set_current_filename(current_filename);
-
-	if (li->is_null()){
-		this->show_nothing();
-		return false;
-	}
-	this->color_calculated = false;
-	label->move(0, 0);
-	this->setWindowTitle(current_filename);
-	this->displayed_image = li;
-
-	label->reset_transform();
-	this->set_zoom();
-
-	this->apply_zoom(true, 1);
-	return true;
-}
-
-void MainWindow::display_filtered_image(const std::shared_ptr<LoadedGraphics> &graphics){
-	this->displayed_image = graphics;
-	this->display_image_in_label(graphics, false);
-}
-
-void MainWindow::display_image_in_label(const std::shared_ptr<LoadedGraphics> &graphics, bool first_display){
-	auto zoom = this->get_current_zoom();
-	auto &label = this->ui->label;
-	label->set_image(*graphics);
-	label->set_zoom(zoom);
-	auto size = label->get_size();
-	int mindim = std::min(size.width(), size.height());
-	this->window_state->set_border_size(
-		(std::uint32_t)mindim < this->window_state->default_border_size * 3 ?
-		mindim / 3 :
-		this->window_state->default_border_size
-	);
-	if (size.width() <= 0 || size.height() <= 0){
-		//Too far.
-		this->reset_zoom_slot();
-		return;
-	}
-	label->resize(size);
-
-	if (!this->color_calculated && this->displayed_image->has_alpha()){
-		this->set_background(true);
-		this->color_calculated = true;
-	}
-
-	this->reposition_window();
-	this->set_background_sizes();
-
-	if (first_display && this->app->get_center_when_displayed()){
-		auto label_size = label->size();
-		auto window_size = this->size();
-		auto new_label_position = (window_size - label_size) / 2;
-		this->move_image(to_QPoint(new_label_position));
-	}
-}
-
 void MainWindow::show_context_menu(QMouseEvent *ev){
 	this->app->postEvent(this, new QContextMenuEvent(QContextMenuEvent::Other, ev->screenPos().toPoint()));
 }
@@ -426,9 +157,7 @@ void MainWindow::build_context_menu(QMenu &main_menu){
 //	QMainWindow::keyReleaseEvent(ev);
 //}
 
-void MainWindow::resizeEvent(QResizeEvent *){
-	this->set_background_sizes();
-}
+void MainWindow::resizeEvent(QResizeEvent *){}
 
 void MainWindow::changeEvent(QEvent *ev){
 	if (ev->type() == QEvent::WindowStateChange){
@@ -460,22 +189,10 @@ void MainWindow::resolution_change(int screen){
 	if (screen != this_screen)
 		return;
 	this->set_desktop_size(this_screen);
-	this->fix_positions_and_zoom();
 }
 
 void MainWindow::resolution_to_window_size(){
 	this->setGeometry(this->screen_sizes[this->get_current_desktop_number()]);
-}
-
-void MainWindow::fix_positions_and_zoom(bool do_not_enlarge){
-	if (this->current_zoom_mode_is_auto()){
-		auto zoom = this->get_current_zoom();
-		this->set_zoom();
-		this->apply_zoom(false, zoom);
-	}
-	this->reposition_window(do_not_enlarge);
-	this->reposition_image();
-	this->ui->label->repaint();
 }
 
 void MainWindow::work_area_change(int screen){
@@ -484,7 +201,6 @@ void MainWindow::work_area_change(int screen){
 	if (screen != this_screen)
 		return;
 	this->set_desktop_size(this_screen);
-	this->fix_positions_and_zoom();
 }
 
 void MainWindow::resize_window_rect(const QSize &s){
@@ -508,134 +224,25 @@ void MainWindow::set_window_rect(const QRect &r){
 	this->set_current_desktop_and_fix_positions_by_window_position(this->current_desktop);
 }
 
-void MainWindow::label_transform_updated(){
-	this->set_background_sizes();
-}
-
-QMatrix MainWindow::get_image_transform() const{
-	return this->ui->label->get_transform();
-}
-
-double MainWindow::set_image_transform(const QMatrix &m){
-	this->ui->label->set_transform(m);
-	this->fix_positions_and_zoom();
-	return this->window_state->get_zoom();
-}
-
 double MainWindow::get_image_zoom() const{
 	return this->window_state->get_zoom();
 }
 
-void MainWindow::set_image_zoom(double x){
-	//double &zoom = this->get_current_zoom();
-	double last = this->get_current_zoom();
-	this->set_current_zoom(x);
-	this->apply_zoom(false, last);
-	this->window_state->set_zoom(x);
-	this->ui->label->set_zoom(x);
-	this->set_current_zoom_mode(ZoomMode::Normal);
-}
-
-QImage MainWindow::get_image() const{
-	return this->displayed_image->get_QImage();
-}
-
-QPoint to_QPoint(const QPointF &p){
-	return{ (int)floor(p.x()), (int)floor(p.y()) };
-}
-
-QPoint compute_origin(const QPointF &origin, const QSizeF &size, const QMatrix &transform){
-	Quadrangular q(size);
-	q *= transform;
-	return to_QPoint(transform.map(origin) - q.get_bounding_box().topLeft());
-}
-
-void MainWindow::move_by_command(const QPoint &p){
-	this->move(p - to_QPoint(this->compute_origin_location() - this->pos()));
-}
-
-void MainWindow::set_scale(double scale){
-	auto old_origin = this->compute_origin_location();
-	
-	this->set_image_zoom(scale);
-	
-	auto new_origin = this->compute_origin_location();
-	auto offset = old_origin - new_origin;
-	this->move(this->pos() + to_QPoint(offset));
-}
-
-void MainWindow::set_origin(int x, int y){
-	this->origin = { x, y };
-}
-
-void MainWindow::set_rotation(double theta){
-	auto old_origin = this->compute_origin_location();
-	
-	this->rotation = theta;
-	this->ui->label->override_rotation(rotation);
-	this->fix_positions_and_zoom();
-	
-	auto new_origin = this->compute_origin_location();
-	auto offset = to_QPoint(old_origin - new_origin);
-	this->move(this->pos() + offset);
-}
-
-typedef std::chrono::high_resolution_clock T;
-
-QPointF MainWindow::compute_origin_location() const{
-	auto &label = *this->ui->label;
-	return this->pos() + label.quad.compute_origin(this->origin);
-}
-
-void MainWindow::anim_move(int x, int y, double speed){
-	auto origin = this->compute_origin_location();
-	
-	this->move_src = origin;
-	this->move_dst = QPointF(x, y);
-	auto l = norm(this->move_dst - this->move_src);
-	auto duration = l / speed;
-	this->move_t0 = T::now();
-	this->move_duration = duration;
-	if (this->move_connection)
-		this->disconnect(this->move_connection);
-	this->move_timer = std::make_unique<QTimer>(this);
-	this->move_timer->setTimerType(Qt::PreciseTimer);
-	this->move_connection = connect(this->move_timer.get(), &QTimer::timeout, this, &MainWindow::move_timeout);
-	this->move_timer->start(10);
-}
-
-void MainWindow::anim_rotate(double speed){
-	if (!speed && this->rotate_timer){
-		if (this->rotate_connection)
-			this->disconnect(this->rotate_connection);
-		this->rotate_timer.reset();
-	}
-	auto &label = *this->ui->label;
-	this->rotate_rotation0 = this->rotation;
-	this->rotate_speed = speed * (360 / 60);
-	this->rotate_t0 = T::now();
-	if (!this->rotate_timer){
-		this->rotate_timer = std::make_unique<QTimer>(this);
-		this->rotate_timer->setTimerType(Qt::PreciseTimer);
-		this->rotate_connection = connect(this->rotate_timer.get(), &QTimer::timeout, this, &MainWindow::rotate_timeout);
-		this->rotate_timer->start(10);
-	}
-}
-
-void MainWindow::move_timeout(){
-	auto t = (double)(T::now() - this->move_t0).count() * T::period::num / T::period::den;
-	t /= this->move_duration;
-	if (t >= 1){
-		this->move_by_command(to_QPoint(this->move_dst));
-		this->disconnect(this->move_connection);
-		this->move_timer.reset();
+void MainWindow::load(const QString &path, std::string &&name){
+	auto image = LoadedImage::create(*this->app, path);
+	if (!image)
 		return;
-	}
-	auto pos = (QPointF)this->move_src * (1 - t) + (QPointF)this->move_dst * t;
-	this->move_by_command(to_QPoint(pos));
+	auto geometry = this->geometry();
+	auto viewport = std::make_shared<ImageViewport>(std::move(name), geometry.size(), this/*->ui->centralWidget*/);
+	//this->ui->label->set_image(LoadedImage::create(*this->app, path));
+	viewport->set_image(std::move(image), geometry.size());
+	viewport->show();
+	this->windows_by_name[viewport->get_name()] = viewport;
 }
 
-void MainWindow::rotate_timeout(){
-	auto elapsed_seconds = (double)(T::now() - this->rotate_t0).count() * T::period::num / T::period::den;
-	this->set_rotation(this->rotate_rotation0 + this->rotate_speed * elapsed_seconds);
+MainWindow::sharedp_t MainWindow::get_window(const std::string &name){
+	auto it = this->windows_by_name.find(name);
+	if (it == this->windows_by_name.end())
+		return {};
+	return it->second;
 }

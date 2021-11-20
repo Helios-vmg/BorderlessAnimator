@@ -13,6 +13,7 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include "ImageViewerApplication.h"
 #include "Misc.h"
 #include "Settings.h"
+#include "ImageViewport.h"
 #include <QMainWindow>
 #include <QMouseEvent>
 #include <QDesktopWidget>
@@ -21,7 +22,6 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include <vector>
 #include <memory>
 #include <chrono>
-#include <QTimer>
 
 namespace Ui {
 class MainWindow;
@@ -43,9 +43,12 @@ public:
 class MainWindow : public QMainWindow{
 	Q_OBJECT
 
+public:
+	typedef std::shared_ptr<ImageViewport> sharedp_t;
 protected:
 	std::shared_ptr<Ui::MainWindow> ui;
 	ImageViewerApplication *app;
+	QPoint origin;
 	std::vector<QRect> desktop_sizes,
 		screen_sizes;
 	int current_desktop = -1;
@@ -55,15 +58,14 @@ protected:
 		first_label_pos;
 	Optional<QPoint> image_pos;
 	QSize first_window_size;
-	std::shared_ptr<LoadedGraphics> displayed_image;
 	std::vector<int> horizontal_clampers,
 		vertical_clampers;
 	//QString current_directory,
 	//	current_filename;
-	bool moving_forward;
 	std::vector<std::shared_ptr<QShortcut>> shortcuts;
 	bool not_moved;
-	bool color_calculated;
+
+	std::map<std::string, sharedp_t> windows_by_name;
 
 	enum class ResizeMode{
 		None        = 0,
@@ -79,42 +81,18 @@ protected:
 	ResizeMode resize_mode;
 
 	std::shared_ptr<WindowState> window_state;
-	std::string name;
-	QPoint origin{};
-	double rotation = 0;
-	
-	QPointF move_src, move_dst;
-	std::chrono::time_point<std::chrono::high_resolution_clock> move_t0;
-	double move_duration;
-	std::unique_ptr<QTimer> move_timer;
-	QMetaObject::Connection move_connection;
-
-	double rotate_rotation0;
-	double rotate_speed;
-	std::chrono::time_point<std::chrono::high_resolution_clock> rotate_t0;
-	std::unique_ptr<QTimer> rotate_timer;
-	QMetaObject::Connection rotate_connection;
 
 	bool move_image(const QPoint &new_position);
 	QPoint compute_movement(const QPoint &new_position, const QPoint &mouse_position);
 	bool compute_resize(QPoint &out_label_pos, QRect &out_window_rect, QPoint mouse_offset, const QPoint &mouse_position);
 	void move_window(const QPoint &new_position, const QPoint &mouse_position);
 	void reset_settings();
-	void compute_average_color(QImage img);
-	virtual void set_background(bool force = false);
-	void show_nothing();
-	void set_solid(const QColor &col);
-	void set_background_sizes();
 	ResizeMode get_resize_mode(const QPoint &pos);
 	void set_resize_mode(const QPoint &pos);
-	void setup_backgrounds();
-	void resize_to_max(bool do_not_enlarge = false);
 	bool perform_clamping();
 	bool force_keep_window_in_desktop();
 	void init(bool restoring);
 	void show_context_menu(QMouseEvent *);
-	void change_zoom(bool in);
-	void apply_zoom(bool, double);
 	void offset_image(const QPoint &);
 	int get_current_desktop_number();
 	void set_current_desktop_and_fix_positions_by_window_position(int old_desktop);
@@ -125,21 +103,15 @@ protected:
 	void set_current_zoom_mode(const ZoomMode &);
 	ZoomMode get_current_zoom_mode() const;
 	void resolution_to_window_size();
-	void reposition_window(bool do_not_enlarge = false);
 	void reposition_image();
-	void save_image_pos(bool force = false);
-	void restore_image_pos();
 	void clear_image_pos();
 	void rotate(bool right, bool fine = false);
-	void fix_positions_and_zoom(bool do_not_enlarge = false);
 
 	struct ZoomResult{
 		double zoom;
 		QSize label_size;
 	};
 	
-	ZoomResult compute_zoom(int override_rotation = -1);
-
 protected:
 	void mousePressEvent(QMouseEvent *ev) override;
 	void mouseReleaseEvent(QMouseEvent *ev) override;
@@ -153,27 +125,15 @@ protected:
 	void closeEvent(QCloseEvent *event) override;
 	void contextMenuEvent(QContextMenuEvent *) override;
 	//bool event(QEvent *) override;
-	QPointF compute_origin_location() const;
 
 public:
-	explicit MainWindow(ImageViewerApplication &app, const QString &path, QWidget *parent = 0);
-	bool open_path_and_display_image(QString path);
-	void display_image_in_label(const std::shared_ptr<LoadedGraphics> &graphics, bool first_display);
-	void display_filtered_image(const std::shared_ptr<LoadedGraphics> &);
-	std::shared_ptr<WindowState> save_state() const;
-	void restore_state(const std::shared_ptr<WindowState> &);
-	bool is_null() const{
-		return !this->displayed_image || this->displayed_image->is_null();
-	}
+	explicit MainWindow(ImageViewerApplication &app, const QRect &geom, QWidget *parent = 0);
 	void resolution_change(int screen);
 	void work_area_change(int screen);
 	void resize_window_rect(const QSize &);
 	void move_window_rect(const QPoint &);
 	void set_window_rect(const QRect &);
-	QMatrix get_image_transform() const;
 	double get_image_zoom() const;
-	void set_image_zoom(double);
-	double set_image_transform(const QMatrix &);
 	void build_context_menu(QMenu &main_menu);
 	bool current_zoom_mode_is_auto() const{
 		return check_flag(this->get_current_zoom_mode(), ZoomMode::AutomaticZoom);
@@ -181,32 +141,13 @@ public:
 	bool current_zoom_mode_is_auto_rotation() const{
 		return check_flag(this->get_current_zoom_mode(), ZoomMode::AutomaticRotation);
 	}
-	QImage get_image() const;
 	ImageViewerApplication &get_app(){
 		return *this->app;
 	}
-	bool is_loaded() const{
-		return !!this->displayed_image;
-	}
-	void set_name(const std::string &name){
-		this->name = name;
-	}
-	const std::string &get_name() const{
-		return this->name;
-	}
-	void move_by_command(const QPoint &);
-	void set_scale(double scale);
-	void set_origin(int x, int y);
-	double get_rotation() const{
-		return this->rotation;
-	}
-	void set_rotation(double theta);
-	void anim_move(int x, int y, double speed);
-	void anim_rotate(double speed);
+	void load(const QString &path, std::string &&name);
+	sharedp_t get_window(const std::string &name);
 
 public slots:
-	void label_transform_updated();
-
 	void quit_slot();
 	void background_swap_slot();
 	void close_slot();
@@ -233,8 +174,6 @@ public slots:
 	void minimize_all_slot();
 	void flip_h();
 	void flip_v();
-	void move_timeout();
-	void rotate_timeout();
 
 signals:
 	void closing(MainWindow *);

@@ -28,9 +28,8 @@ class ImageViewerApplication : public SingleInstanceApplication{
 	Q_OBJECT
 
 	typedef std::shared_ptr<MainWindow> sharedp_t;
-	std::map<uintptr_t, sharedp_t> windows;
-	std::map<std::string, sharedp_t> windows_by_name;
-	std::vector<std::shared_ptr<QAction> > actions;
+	sharedp_t main_window;
+	std::vector<std::shared_ptr<QAction>> actions;
 	MainWindow *context_menu_last_requester;
 	QString config_location,
 		config_filename,
@@ -65,7 +64,6 @@ class ImageViewerApplication : public SingleInstanceApplication{
 
 protected:
 	void new_instance(const QStringList &args) override;
-	void add_window(std::string &&name, sharedp_t window);
 	static QJsonDocument load_json(const QString &, QByteArray &digest);
 	static void conditionally_save_file(const QByteArray &contents, const QString &path, QByteArray &last_digest);
 

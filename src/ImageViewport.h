@@ -10,100 +10,79 @@ Distributed under a permissive license. See COPYING.txt for details.
 
 #include "Quadrangular.h"
 #include "Settings.h"
+#include <chrono>
 #include <QLabel>
 #include <QImage>
 #include <QMatrix>
+#include <QTimer>
 
 class LoadedGraphics;
 
 class ImageViewport : public QLabel
 {
 	Q_OBJECT
-	QMatrix transform;
-	double zoom;
+	std::unique_ptr<LoadedGraphics> image;
+	QPointF origin;
+	QPointF translation;
+	double rotation = 0;
+	double zoom = 1;
 	QSize image_size;
-
-	QMatrix get_final_transform() const{
-		auto ret = this->transform;
-		ret.scale(this->zoom, this->zoom);
-		return ret;
-	}
-	QMatrix get_final_transform(double zoom) const{
-		auto ret = this->transform;
-		ret.scale(zoom, zoom);
-		return ret;
-	}
-	Quadrangular compute_quad(const QSize &size) const{
-		return Quadrangular(size) * this->get_final_transform();
-	}
-	Quadrangular compute_quad(const QSize &size, double zoom) const{
-		return Quadrangular(size) * this->get_final_transform(zoom);
-	}
-	Quadrangular compute_quad_no_zoom(const QSize &size) const{
-		return Quadrangular(size) * this->transform;
-	}
-	Quadrangular compute_quad() const{
-		return this->compute_quad(this->image_size);
-	}
-	void transform_changed();
-public:
-	Quadrangular quad;
-	QMatrix final_transform;
+	bool update_transform = false;
+	QMatrix transform;
 	
+	std::string name;
+
+	QPointF move_src, move_dst;
+	std::chrono::time_point<std::chrono::high_resolution_clock> move_t0;
+	double move_duration;
+	std::unique_ptr<QTimer> move_timer;
+	QMetaObject::Connection move_connection;
+
+	double rotate_rotation0;
+	double rotate_speed;
+	std::chrono::time_point<std::chrono::high_resolution_clock> rotate_t0;
+	std::unique_ptr<QTimer> rotate_timer;
+	QMetaObject::Connection rotate_connection;
+
+
+	QMatrix get_transform(){
+		if (!this->update_transform)
+			return this->transform;
+		this->update_transform = false;
+		auto first = QMatrix().translate(-this->origin.x(), -this->origin.y());
+		auto second = QMatrix().rotate(this->rotation).scale(this->zoom, this->zoom);;
+		return this->transform = first * second * QMatrix().translate(this->translation.x(), this->translation.y());
+	}
+public:
 	explicit ImageViewport(QWidget *parent = 0);
-	void reset_transform(){
-		this->transform.reset();
-	}
-	void set_zoom(double x){
-		this->zoom = x;
-	}
-	double get_zoom() const{
-		return this->zoom;
-	}
-	void rotate(double delta_theta);
-	void override_rotation(double delta_theta);
-	void update_size(){
-		this->resize(this->get_size());
-	}
-	QSize compute_size(const QSize &size) const{
-		return this->compute_quad(size).get_bounding_box().size().toSize();
-	}
-	QSize compute_size_no_zoom(const QSize &size) const{
-		return this->compute_quad_no_zoom(size).get_bounding_box().size().toSize();
-	}
-	QSize compute_size(const QSize &size, double zoom) const{
-		return this->compute_quad(size, zoom).get_bounding_box().size().toSize();
-	}
-	QSize get_size() const{
-		if (!this->pixmap() && !this->movie())
-			return QSize(800, 600);
-		return this->compute_size(this->image_size);
-	}
+	explicit ImageViewport(std::string &&name, const QSize &size, QWidget *parent = 0);
 	QSize get_image_size() const{
 		return this->image_size;
 	}
-	QRect get_geometry() const{
-		auto ret = this->geometry();
-		ret.setSize(this->get_size());
-		return ret;
-	}
-	QMatrix get_transform(){
-		return this->transform;
-	}
-	void set_transform(const QMatrix &);
 	void flip(bool hor);
 
-	void save_state(WindowState &) const;
-	void load_state(const WindowState &);
-
 	void paintEvent(QPaintEvent *) override;
-	void set_image(LoadedGraphics &li);
+	void set_image(std::unique_ptr<LoadedGraphics> &&li, const QSize &geom);
+	const std::string &get_name() const{
+		return this->name;
+	}
+
+	void move_by_command(const QPointF &);
+	void set_scale(double scale);
+	void set_origin(int x, int y);
+	double get_rotation() const{
+		return this->rotation;
+	}
+	void set_rotation(double theta);
+	void anim_move(int x, int y, double speed);
+	void anim_rotate(double speed);
 
 signals:
 	void transform_updated();
 
 public slots:
-
+	void move_timeout();
+	void rotate_timeout();
 };
 
 #endif // IMAGEVIEWPORT_H

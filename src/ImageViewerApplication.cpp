@@ -50,6 +50,22 @@ AutoSetter<T> autoset(T &dst, T value){
 	return AutoSetter<T>(dst, value);
 }
 
+QRect get_desktop_geometry(QDesktopWidget &desktop){
+	auto n = desktop.screenCount();
+	QRect ret;
+	if (n < 1)
+		return ret;
+	ret = desktop.screenGeometry(0);
+	for (decltype(n) i = 1; i < n; i++){
+		auto geom = desktop.screenGeometry(i);
+		ret.setLeft(std::min(ret.left(), geom.left()));
+		ret.setTop(std::min(ret.top(), geom.top()));
+		ret.setRight(std::max(ret.right(), geom.right()));
+		ret.setBottom(std::max(ret.bottom(), geom.bottom()));
+	}
+	return ret;
+}
+
 ImageViewerApplication::ImageViewerApplication(int &argc, char **argv, const QString &unique_name):
 		SingleInstanceApplication(argc, argv, unique_name),
 		tray_icon(QIcon(":/icon16.png"), this){
@@ -58,12 +74,15 @@ ImageViewerApplication::ImageViewerApplication(int &argc, char **argv, const QSt
 	this->tray_icon.show();
 	this->setQuitOnLastWindowClosed(false);
 	this->setup_command_handlers();
+
+	auto desktop_geometry = get_desktop_geometry(*this->desktop());
+	
+	this->main_window.reset(new MainWindow(*this, desktop_geometry));
 	ImageViewerApplication::new_instance(this->args);
 	this->setup_slots();
 }
 
 ImageViewerApplication::~ImageViewerApplication(){
-	this->windows.clear();
 }
 
 void ImageViewerApplication::new_instance(const QStringList &args){
@@ -76,28 +95,7 @@ void ImageViewerApplication::new_instance(const QStringList &args){
 	(this->*it->second)(args);
 }
 
-void ImageViewerApplication::add_window(std::string &&name, sharedp_t p){
-	if (!p->is_loaded()){
-		p->close();
-		return;
-	}
-	connect(p.get(), SIGNAL(closing(MainWindow *)), this, SLOT(window_closing(MainWindow *)));
-	p->show();
-	p->raise();
-	p->activateWindow();
-	p->setFocus();
-	this->windows[(uintptr_t)p.get()] = p;
-	p->set_name(name);
-	this->windows_by_name[std::move(name)] = p;
-}
-
-void ImageViewerApplication::window_closing(MainWindow *window){
-	auto it = this->windows.find((uintptr_t)window);
-	if (it == this->windows.end())
-		return;
-	this->windows.erase(it);
-	this->windows_by_name.erase(window->get_name());
-}
+void ImageViewerApplication::window_closing(MainWindow *window){}
 
 class SettingsException : public GenericException{
 public:
@@ -151,18 +149,12 @@ QJsonDocument ImageViewerApplication::load_json(const QString &path, QByteArray 
 }
 
 void ImageViewerApplication::resolution_change(int screen){
-	for (auto &i : this->windows)
-		i.second->resolution_change(screen);
 }
 
 void ImageViewerApplication::work_area_change(int screen){
-	for (auto &i : this->windows)
-		i.second->work_area_change(screen);
 }
 
 void ImageViewerApplication::minimize_all(){
-	for (auto &p : this->windows)
-		p.second->minimize_slot();
 }
 
 QString get_config_location(bool strip_last_item = true){

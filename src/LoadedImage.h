@@ -37,7 +37,7 @@ public:
 	}
 	virtual void assign_to_QLabel(QLabel &) = 0;
 	virtual QImage get_QImage() const = 0;
-	static std::shared_ptr<LoadedGraphics> create(ImageViewerApplication &app, const QString &path);
+	static std::unique_ptr<LoadedGraphics> create(ImageViewerApplication &app, const QString &path);
 };
 
 class LoadedImage : public LoadedGraphics{
@@ -72,6 +72,9 @@ public:
 	}
 	void assign_to_QLabel(QLabel &) override;
 	QImage get_QImage() const override;
+	QMovie &get_movie() const{
+		return *this->animation;
+	}
 };
 
 #endif // LOADEDIMAGE_H
