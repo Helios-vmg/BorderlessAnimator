@@ -8,7 +8,6 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 #include "Misc.h"
-#include "RotateDialog.h"
 #include <algorithm>
 #include <limits>
 #include <QImage>
@@ -82,7 +81,6 @@ void MainWindow::init(bool restoring){
 
 	this->setMouseTracking(true);
 	this->ui->centralWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-	this->setup_shortcuts();
 
 	connect(this->ui->label, SIGNAL(transform_updated()), this, SLOT(label_transform_updated()));
 }
@@ -299,7 +297,6 @@ void MainWindow::set_background(bool force){
 	p1->show();
 	p2->hide();
 	this->window_state->set_using_checkerboard_pattern_updated(false);
-	this->app->save_settings();
 }
 
 void MainWindow::set_background_sizes(){
@@ -327,38 +324,8 @@ void MainWindow::resize_to_max(bool do_not_enlarge){
 	auto label_size = label->get_size();
 	label->resize(label_size);
 	auto rect = this->geometry();
-	if (this->app->get_option_values()->get_resize_windows_on_monitor_change()){
-		auto screen_number = this->get_current_desktop_number();
-		auto ds = this->desktop_sizes[screen_number];
-		auto new_size = ds.size();
-		new_size = label->size().boundedTo(new_size);
-		if (do_not_enlarge)
-			new_size = new_size.boundedTo(this->size());
-		rect.setSize(new_size);
-		if (rect.left() < ds.left())
-			rect.moveLeft(ds.left());
-		else if (rect.right() > ds.right())
-			rect.moveRight(ds.right());
-		if (rect.top() < ds.top())
-			rect.moveTop(ds.top());
-		else if (rect.bottom() > ds.bottom())
-			rect.moveBottom(ds.bottom());
-	}else
-		rect.setSize(label_size);
+	rect.setSize(label_size);
 	this->set_window_rect(rect);
-}
-
-void MainWindow::advance(){
-	if (!this->directory_iterator)
-		return;
-	if (this->moving_forward)
-		++*this->directory_iterator;
-	else
-		--*this->directory_iterator;
-}
-
-void MainWindow::set_iterator(){
-	this->directory_iterator->advance_to(this->window_state->get_current_filename());
 }
 
 double MainWindow::get_current_zoom() const{
@@ -370,7 +337,6 @@ void MainWindow::set_current_zoom(double value){
 		this->window_state->set_fullscreen_zoom(value);
 	else
 		this->window_state->set_zoom(value);
-	this->app->save_settings();
 }
 
 void MainWindow::set_current_zoom_mode(const ZoomMode &mode){
@@ -378,25 +344,10 @@ void MainWindow::set_current_zoom_mode(const ZoomMode &mode){
 		this->window_state->set_zoom_mode(mode);
 	else
 		this->window_state->set_fullscreen_zoom_mode(mode);
-	this->app->save_settings();
 }
 
 ZoomMode MainWindow::get_current_zoom_mode() const{
 	return !this->window_state->get_fullscreen() ? this->window_state->get_zoom_mode() : this->window_state->get_fullscreen_zoom_mode();
-}
-
-void MainWindow::move_in_direction(bool forward){
-	if (!this->directory_iterator)
-		return;
-	this->set_iterator();
-	this->moving_forward = forward;
-	auto old_pos = this->directory_iterator->pos();
-	this->advance();
-	if (this->directory_iterator->pos() == old_pos)
-		return;
-	this->clear_image_pos();
-	this->open_path_and_display_image(**this->directory_iterator);
-	this->app->save_settings();
 }
 
 class ElapsedTimer{
@@ -415,54 +366,16 @@ public:
 
 bool MainWindow::open_path_and_display_image(QString path){
 	ElapsedTimer et((QString)"open_path_and_display_image(" + path + ")");
-	std::shared_ptr<LoadedGraphics> li;
-	size_t i = 0;
 	auto &label = this->ui->label;
-	if (!!this->directory_iterator)
-		i = this->directory_iterator->pos();
-	while (true){
-		li = LoadedGraphics::create(*this->app, path);
-		qDebug() << path;
-		if (!li->is_null())
-			break;
-		if (!!this->directory_iterator){
-			this->advance();
-			if (this->directory_iterator->pos() == i)
-				break;
-			path = **this->directory_iterator;
-		}else
-			break;
-	}
+	auto li = LoadedGraphics::create(*this->app, path);
+	qDebug() << path;
 
 	QString current_filename;
 
-	bool unset = true;
-	if (!this->directory_iterator){
-		auto di = this->app->request_directory_iterator_by_url(path);
-		if (di){
-			this->directory_iterator = di;
-			current_filename = this->app->get_filename_from_url(path);
-			this->window_state->set_file_is_url(true);
-			this->window_state->set_current_url(path);
-			this->window_state->set_current_filename(current_filename);
-			unset = false;
-		}
-	}else if (!this->directory_iterator->get_is_local()){
-		current_filename = this->directory_iterator->get_current_filename();
-		this->window_state->set_file_is_url(true);
-		this->window_state->set_current_url(path);
-		this->window_state->set_current_filename(current_filename);
-		unset = false;
-	}
-	if (unset){
-		QString current_directory;
-		split_path(current_directory, current_filename, path);
-		this->window_state->set_current_directory(current_directory);
-		this->window_state->set_current_filename(current_filename);
-		this->window_state->set_file_is_url(false);
-		if (!this->directory_iterator)
-			this->directory_iterator = this->app->request_local_directory_iterator(current_directory);
-	}
+	QString current_directory;
+	split_path(current_directory, current_filename, path);
+	this->window_state->set_current_directory(current_directory);
+	this->window_state->set_current_filename(current_filename);
 
 	if (li->is_null()){
 		this->show_nothing();
@@ -520,18 +433,12 @@ void MainWindow::display_image_in_label(const std::shared_ptr<LoadedGraphics> &g
 	}
 }
 
-void MainWindow::show_rotate_dialog(){
-	RotateDialog dialog(*this);
-	dialog.exec();
-}
-
 void MainWindow::show_context_menu(QMouseEvent *ev){
 	this->app->postEvent(this, new QContextMenuEvent(QContextMenuEvent::Other, ev->screenPos().toPoint()));
 }
 
 void MainWindow::build_context_menu(QMenu &main_menu){
-	main_menu.addAction("Transform...", this, SLOT(show_rotate_dialog()));
-	main_menu.addAction("Close", this, SLOT(close_slot()), this->app->get_shortcuts().get_current_sequence(close_command));
+	main_menu.addAction("Close", this, SLOT(close_slot()));
 }
 
 //void MainWindow::keyReleaseEvent(QKeyEvent *ev){
@@ -567,14 +474,7 @@ void MainWindow::contextMenuEvent(QContextMenuEvent *ev){
 	menu->exec();
 }
 
-//bool MainWindow::event(QEvent *event){
-//
-//}
-
-void MainWindow::cleanup(){
-	this->app->release_directory(this->directory_iterator);
-	this->directory_iterator.reset();
-}
+void MainWindow::cleanup(){}
 
 void MainWindow::resolution_change(int screen){
 	auto desktop = this->app->desktop();

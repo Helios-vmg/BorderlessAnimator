@@ -40,8 +40,6 @@ void MainWindow::reset_left_mouse(const MouseEvent &ev){
 void MainWindow::mouseReleaseEvent(QMouseEvent *ev){
 	if (this->not_moved)
 		this->show_context_menu(ev);
-	else
-		this->app->save_settings();
 	this->not_moved = false;
 }
 
@@ -62,7 +60,7 @@ bool MainWindow::set_cursor_flags(const MouseEvent &ev){
 	if (!ev.button_sum)
 		rm = this->get_resize_mode(ev.relative);
 	else{
-		if (!left)
+		if (!ev.left)
 			this->resize_mode = ResizeMode::None;
 		rm = this->resize_mode;
 	}

@@ -58,7 +58,6 @@ protected:
 		vertical_clampers;
 	//QString current_directory,
 	//	current_filename;
-	std::shared_ptr<DirectoryIterator> directory_iterator;
 	bool moving_forward;
 	std::vector<std::shared_ptr<QShortcut> > shortcuts;
 	bool not_moved;
@@ -97,10 +96,7 @@ protected:
 	bool perform_clamping();
 	bool force_keep_window_in_desktop();
 	void cleanup();
-	void move_in_direction(bool forward);
-	void advance();
 	void init(bool restoring);
-	void setup_shortcut(const QKeySequence &sequence, const char *slot);
 	void show_context_menu(QMouseEvent *);
 	void change_zoom(bool in);
 	void apply_zoom(bool, double);
@@ -109,7 +105,6 @@ protected:
 	void set_current_desktop_and_fix_positions_by_window_position(int old_desktop);
 	void set_desktop_size();
 	void set_desktop_size(int screen);
-	void set_iterator();
 	double get_current_zoom() const;
 	void set_current_zoom(double);
 	void set_current_zoom_mode(const ZoomMode &);
@@ -165,7 +160,6 @@ public:
 	double get_image_zoom() const;
 	void set_image_zoom(double);
 	double set_image_transform(const QMatrix &);
-	void setup_shortcuts();
 	void build_context_menu(QMenu &main_menu);
 	bool current_zoom_mode_is_auto() const{
 		return check_flag(this->get_current_zoom_mode(), ZoomMode::AutomaticZoom);
@@ -186,9 +180,6 @@ public slots:
 	virtual void transparent_background();
 
 	void quit_slot();
-	void quit2_slot();
-	void next_slot();
-	void back_slot();
 	void background_swap_slot();
 	void close_slot();
 	void zoom_in_slot();
@@ -205,8 +196,6 @@ public slots:
 	void cycle_zoom_mode_slot();
 	void set_zoom();
 	void toggle_lock_zoom_slot();
-	void go_to_start();
-	void go_to_end();
 	void toggle_fullscreen();
 	void rotate_left();
 	void rotate_right();
@@ -216,8 +205,6 @@ public slots:
 	void minimize_all_slot();
 	void flip_h();
 	void flip_v();
-	void show_rotate_dialog();
-	void show_options_dialog();
 
 signals:
 	void closing(MainWindow *);

@@ -60,7 +60,6 @@ public:
 };
 
 class LoadedAnimation : public LoadedGraphics{
-	std::unique_ptr<QIODevice> device;
 	std::unique_ptr<QMovie> animation;
 
 public:

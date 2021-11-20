@@ -86,9 +86,7 @@ QImage LoadedImage::get_QImage() const{
 }
 
 LoadedAnimation::LoadedAnimation(ImageViewerApplication &app, const QString &path){
-	auto pair = app.load_animation(path);
-	this->animation = std::move(pair.first);
-	this->device = std::move(pair.second);
+	this->animation = app.load_animation(path);
 	this->null = !this->animation->isValid();
 	if (!this->null){
 		(void)this->animation->jumpToNextFrame();
