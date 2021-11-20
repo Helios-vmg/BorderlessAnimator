@@ -57,6 +57,7 @@ ImageViewerApplication::ImageViewerApplication(int &argc, char **argv, const QSt
 	this->reset_tray_menu();
 	this->tray_icon.show();
 	this->setQuitOnLastWindowClosed(false);
+	this->setup_command_handlers();
 	ImageViewerApplication::new_instance(this->args);
 	this->setup_slots();
 }
@@ -66,12 +67,16 @@ ImageViewerApplication::~ImageViewerApplication(){
 }
 
 void ImageViewerApplication::new_instance(const QStringList &args){
-	auto p = std::make_shared<MainWindow>(*this, args);
-	if (!p->is_null())
-		this->add_window(p);
+	if (args.size() < 2)
+		return;
+	auto command = args[1].toStdString();
+	auto it = this->command_handlers.find(command);
+	if (it == this->command_handlers.end())
+		return;
+	(this->*it->second)(args);
 }
 
-void ImageViewerApplication::add_window(sharedp_t p){
+void ImageViewerApplication::add_window(std::string &&name, sharedp_t p){
 	if (!p->is_loaded()){
 		p->close();
 		return;
@@ -82,6 +87,8 @@ void ImageViewerApplication::add_window(sharedp_t p){
 	p->activateWindow();
 	p->setFocus();
 	this->windows[(uintptr_t)p.get()] = p;
+	p->set_name(name);
+	this->windows_by_name[std::move(name)] = p;
 }
 
 void ImageViewerApplication::window_closing(MainWindow *window){
@@ -89,13 +96,7 @@ void ImageViewerApplication::window_closing(MainWindow *window){
 	if (it == this->windows.end())
 		return;
 	this->windows.erase(it);
-}
-
-void ImageViewerApplication::save_current_windows(std::vector<std::shared_ptr<WindowState>> &windows){
-	windows.clear();
-	windows.reserve(this->windows.size());
-	for (auto &w : this->windows)
-		windows.push_back(w.second->save_state());
+	this->windows_by_name.erase(window->get_name());
 }
 
 class SettingsException : public GenericException{
@@ -121,11 +122,6 @@ void ImageViewerApplication::conditionally_save_file(const QByteArray &contents,
 	file.write(contents);
 
 	last_digest = new_digest;
-}
-
-void ImageViewerApplication::restore_current_windows(const std::vector<std::shared_ptr<WindowState>> &window_states){
-	for (auto &state : window_states)
-		this->add_window(std::make_shared<MainWindow>(*this, state));
 }
 
 std::shared_ptr<QMenu> ImageViewerApplication::build_context_menu(MainWindow *caller){
@@ -208,14 +204,6 @@ QString ImageViewerApplication::get_config_subpath(QString &dst, const char *sub
 	return ret;
 }
 
-QString ImageViewerApplication::get_settings_filename(){
-	return this->get_config_subpath(this->config_filename, "settings.json");
-}
-
-QString ImageViewerApplication::get_state_filename(){
-	return this->get_config_subpath(this->state_filename, "state.json");
-}
-
 void ImageViewerApplication::setup_slots(){
 	connect(this->desktop(), SIGNAL(resized(int)), this, SLOT(resolution_change(int)));
 	connect(this->desktop(), SIGNAL(workAreaResized(int)), this, SLOT(work_area_change(int)));
@@ -276,12 +264,15 @@ QString get_per_user_unique_id(){
 	return QString::fromUtf8(bytes);
 }
 
-void ImageViewerApplication::turn_transparent(MainWindow &window, bool yes){
-	auto state = window.save_state();
-	std::shared_ptr<MainWindow> new_window;
-	if (yes)
-		new_window = std::make_shared<TransparentMainWindow>(*this, state);
-	else
-		new_window = std::make_shared<MainWindow>(*this, state);
-	this->add_window(new_window);
+#define SETUP_COMMAND_HANDLER(command) this->command_handlers[#command] = &ImageViewerApplication::handle_##command
+
+void ImageViewerApplication::setup_command_handlers(){
+	SETUP_COMMAND_HANDLER(load);
+	SETUP_COMMAND_HANDLER(scale);
+	SETUP_COMMAND_HANDLER(setorigin);
+	SETUP_COMMAND_HANDLER(move);
+	SETUP_COMMAND_HANDLER(rotate);
+	SETUP_COMMAND_HANDLER(animmove);
+	SETUP_COMMAND_HANDLER(animrotate);
+	SETUP_COMMAND_HANDLER(loadscript);
 }

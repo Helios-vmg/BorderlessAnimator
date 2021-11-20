@@ -17,34 +17,15 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include <cassert>
 #include "GenericException.h"
 
-MainWindow::MainWindow(ImageViewerApplication &app, const QStringList &arguments, QWidget *parent):
+MainWindow::MainWindow(ImageViewerApplication &app, const QString &path, QWidget *parent):
 		QMainWindow(parent),
 		ui(new Ui::MainWindow),
 		app(&app){
 	this->init(false);
-	if (arguments.size() >= 2)
-		this->open_path_and_display_image(arguments[1]);
-}
-
-TransparentMainWindow::TransparentMainWindow(ImageViewerApplication &app, const std::shared_ptr<WindowState> &state, QWidget *parent):
-		MainWindow(app, state, parent){
+	this->open_path_and_display_image(path);
 	this->setAttribute(Qt::WA_TranslucentBackground);
 	this->ui->checkerboard->hide();
 	this->ui->solid->hide();
-}
-
-
-MainWindow::MainWindow(ImageViewerApplication &app, const std::shared_ptr<WindowState> &state, QWidget *parent):
-		QMainWindow(parent),
-		ui(new Ui::MainWindow),
-		app(&app){
-	this->init(true);
-	this->restore_state(state);
-	this->set_background();
-}
-
-MainWindow::~MainWindow(){
-	this->cleanup();
 }
 
 void MainWindow::init(bool restoring){
@@ -461,7 +442,6 @@ void MainWindow::changeEvent(QEvent *ev){
 }
 
 void MainWindow::closeEvent(QCloseEvent *){
-	this->cleanup();
 	emit closing(this);
 }
 
@@ -473,8 +453,6 @@ void MainWindow::contextMenuEvent(QContextMenuEvent *ev){
 	menu->move(ev->pos());
 	menu->exec();
 }
-
-void MainWindow::cleanup(){}
 
 void MainWindow::resolution_change(int screen){
 	auto desktop = this->app->desktop();
@@ -534,11 +512,6 @@ void MainWindow::label_transform_updated(){
 	this->set_background_sizes();
 }
 
-void MainWindow::transparent_background(){
-	this->app->turn_transparent(*this, true);
-	this->close();
-}
-
 QMatrix MainWindow::get_image_transform() const{
 	return this->ui->label->get_transform();
 }
@@ -565,12 +538,4 @@ void MainWindow::set_image_zoom(double x){
 
 QImage MainWindow::get_image() const{
 	return this->displayed_image->get_QImage();
-}
-
-void TransparentMainWindow::set_background(bool force){
-}
-
-void TransparentMainWindow::transparent_background(){
-	this->app->turn_transparent(*this, false);
-	this->close();
 }

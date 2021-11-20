@@ -16,6 +16,7 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include <exception>
 #include <QSystemTrayIcon>
 #include <QWindow>
+#include <map>
 
 class QAction;
 class CustomProtocolHandler;
@@ -28,6 +29,7 @@ class ImageViewerApplication : public SingleInstanceApplication{
 
 	typedef std::shared_ptr<MainWindow> sharedp_t;
 	std::map<uintptr_t, sharedp_t> windows;
+	std::map<std::string, sharedp_t> windows_by_name;
 	std::vector<std::shared_ptr<QAction> > actions;
 	MainWindow *context_menu_last_requester;
 	QString config_location,
@@ -41,19 +43,29 @@ class ImageViewerApplication : public SingleInstanceApplication{
 		last_tray_context_menu;
 	QByteArray last_saved_settings_digest;
 	QByteArray last_saved_state_digest;
+	typedef void (ImageViewerApplication::*command_handler_t)(const QStringList &);
+	std::map<std::string, command_handler_t> command_handlers;
 
-	void save_current_windows(std::vector<std::shared_ptr<WindowState>> &);
-	void restore_current_windows(const std::vector<std::shared_ptr<WindowState>> &);
 	QString get_config_location();
 	QString get_config_subpath(QString &dst, const char *sub);
 	QString get_settings_filename();
 	QString get_state_filename();
 	void setup_slots();
 	void reset_tray_menu();
+	void setup_command_handlers();
+
+	void handle_load(const QStringList &);
+	void handle_scale(const QStringList &);
+	void handle_setorigin(const QStringList &);
+	void handle_move(const QStringList &);
+	void handle_rotate(const QStringList &);
+	void handle_animmove(const QStringList &);
+	void handle_animrotate(const QStringList &);
+	void handle_loadscript(const QStringList &);
 
 protected:
 	void new_instance(const QStringList &args) override;
-	void add_window(sharedp_t window);
+	void add_window(std::string &&name, sharedp_t window);
 	static QJsonDocument load_json(const QString &, QByteArray &digest);
 	static void conditionally_save_file(const QByteArray &contents, const QString &path, QByteArray &last_digest);
 
@@ -86,7 +98,6 @@ public:
 	QImage load_image(const QString &);
 	std::unique_ptr<QMovie> load_animation(const QString &);
 	bool is_animation(const QString &);
-	void turn_transparent(MainWindow &window, bool yes);
 
 public slots:
 	void window_closing(MainWindow *);

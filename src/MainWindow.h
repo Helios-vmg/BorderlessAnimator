@@ -78,6 +78,7 @@ protected:
 	ResizeMode resize_mode;
 
 	std::shared_ptr<WindowState> window_state;
+	std::string name;
 
 	bool move_image(const QPoint &new_position);
 	QPoint compute_movement(const QPoint &new_position, const QPoint &mouse_position);
@@ -95,7 +96,6 @@ protected:
 	void resize_to_max(bool do_not_enlarge = false);
 	bool perform_clamping();
 	bool force_keep_window_in_desktop();
-	void cleanup();
 	void init(bool restoring);
 	void show_context_menu(QMouseEvent *);
 	void change_zoom(bool in);
@@ -140,9 +140,7 @@ protected:
 	//bool event(QEvent *) override;
 
 public:
-	explicit MainWindow(ImageViewerApplication &app, const QStringList &arguments, QWidget *parent = 0);
-	explicit MainWindow(ImageViewerApplication &app, const std::shared_ptr<WindowState> &state, QWidget *parent = 0);
-	virtual ~MainWindow();
+	explicit MainWindow(ImageViewerApplication &app, const QString &path, QWidget *parent = 0);
 	bool open_path_and_display_image(QString path);
 	void display_image_in_label(const std::shared_ptr<LoadedGraphics> &graphics, bool first_display);
 	void display_filtered_image(const std::shared_ptr<LoadedGraphics> &);
@@ -174,10 +172,17 @@ public:
 	bool is_loaded() const{
 		return !!this->displayed_image;
 	}
+	void set_name(const std::string &name){
+		this->name = name;
+	}
+	const std::string &get_name() const{
+		return this->name;
+	}
+	void set_scale(double scale);
+	void set_origin(int x, int y);
 
 public slots:
 	void label_transform_updated();
-	virtual void transparent_background();
 
 	void quit_slot();
 	void background_swap_slot();
@@ -209,14 +214,6 @@ public slots:
 signals:
 	void closing(MainWindow *);
 
-};
-
-class TransparentMainWindow : public MainWindow{
-protected:
-	void set_background(bool force = false) override;
-public:
-	explicit TransparentMainWindow(ImageViewerApplication &app, const std::shared_ptr<WindowState> &state, QWidget *parent = 0);
-	void transparent_background() override;
 };
 
 #endif // MAINWINDOW_H

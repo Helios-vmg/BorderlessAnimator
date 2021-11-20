@@ -132,6 +132,7 @@
     <ClCompile Include="$(SolutionDir)\src\MainWindowSettings.cpp" />
     <ClCompile Include="$(SolutionDir)\src\MainWindowShortcuts.cpp" />
     <ClCompile Include="$(SolutionDir)\src\SingleInstanceApplication.cpp" />
+    <ClCompile Include="..\src\CommandHandlers.cpp" />
     <ClCompile Include="..\src\Settings.cpp" />
     <ClCompile Include="GeneratedFiles\DebugRelease\moc_ImageViewerApplication.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
