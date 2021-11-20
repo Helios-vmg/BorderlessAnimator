@@ -17,6 +17,8 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include <string>
 #include <iomanip>
 
+static const double tau = 6.283185307179586476925286766559;
+
 template <typename T1, typename T2>
 std::basic_string<T1> itoa(const T2 &x, unsigned w = 0){
 	std::basic_stringstream<T1> stream;

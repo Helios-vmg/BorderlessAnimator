@@ -59,11 +59,11 @@ void ImageViewport::paintEvent(QPaintEvent *){
 	painter.setRenderHint(or_flags(QPainter::SmoothPixmapTransform, QPainter::Antialiasing));
 	painter.setClipping(false);
 
-	auto transform = this->get_final_transform();
-	auto src_quad = this->compute_quad();
-	auto offset = src_quad.move_to_origin();
-	transform = translate(transform, offset);
-	painter.setMatrix(transform);
+	this->final_transform = this->get_final_transform();
+	this->quad = this->compute_quad();
+	auto offset = this->quad.get_offset();
+	this->final_transform = translate(this->final_transform, offset);
+	painter.setMatrix(this->final_transform);
 	if (this->pixmap())
 		painter.drawPixmap(QRect(QPoint(0, 0), this->image_size), *this->pixmap());
 	else

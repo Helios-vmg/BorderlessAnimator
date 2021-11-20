@@ -539,3 +539,103 @@ void MainWindow::set_image_zoom(double x){
 QImage MainWindow::get_image() const{
 	return this->displayed_image->get_QImage();
 }
+
+QPoint to_QPoint(const QPointF &p){
+	return{ (int)floor(p.x()), (int)floor(p.y()) };
+}
+
+QPoint compute_origin(const QPointF &origin, const QSizeF &size, const QMatrix &transform){
+	Quadrangular q(size);
+	q *= transform;
+	return to_QPoint(transform.map(origin) - q.get_bounding_box().topLeft());
+}
+
+void MainWindow::move_by_command(const QPoint &p){
+	this->move(p - to_QPoint(this->compute_origin_location() - this->pos()));
+}
+
+void MainWindow::set_scale(double scale){
+	auto old_origin = this->compute_origin_location();
+	
+	this->set_image_zoom(scale);
+	
+	auto new_origin = this->compute_origin_location();
+	auto offset = old_origin - new_origin;
+	this->move(this->pos() + to_QPoint(offset));
+}
+
+void MainWindow::set_origin(int x, int y){
+	this->origin = { x, y };
+}
+
+void MainWindow::set_rotation(double theta){
+	auto old_origin = this->compute_origin_location();
+	
+	this->rotation = theta;
+	this->ui->label->override_rotation(rotation);
+	this->fix_positions_and_zoom();
+	
+	auto new_origin = this->compute_origin_location();
+	auto offset = to_QPoint(old_origin - new_origin);
+	this->move(this->pos() + offset);
+}
+
+typedef std::chrono::high_resolution_clock T;
+
+QPointF MainWindow::compute_origin_location() const{
+	auto &label = *this->ui->label;
+	return this->pos() + label.quad.compute_origin(this->origin);
+}
+
+void MainWindow::anim_move(int x, int y, double speed){
+	auto origin = this->compute_origin_location();
+	
+	this->move_src = origin;
+	this->move_dst = QPointF(x, y);
+	auto l = norm(this->move_dst - this->move_src);
+	auto duration = l / speed;
+	this->move_t0 = T::now();
+	this->move_duration = duration;
+	if (this->move_connection)
+		this->disconnect(this->move_connection);
+	this->move_timer = std::make_unique<QTimer>(this);
+	this->move_timer->setTimerType(Qt::PreciseTimer);
+	this->move_connection = connect(this->move_timer.get(), &QTimer::timeout, this, &MainWindow::move_timeout);
+	this->move_timer->start(10);
+}
+
+void MainWindow::anim_rotate(double speed){
+	if (!speed && this->rotate_timer){
+		if (this->rotate_connection)
+			this->disconnect(this->rotate_connection);
+		this->rotate_timer.reset();
+	}
+	auto &label = *this->ui->label;
+	this->rotate_rotation0 = this->rotation;
+	this->rotate_speed = speed * (360 / 60);
+	this->rotate_t0 = T::now();
+	if (!this->rotate_timer){
+		this->rotate_timer = std::make_unique<QTimer>(this);
+		this->rotate_timer->setTimerType(Qt::PreciseTimer);
+		this->rotate_connection = connect(this->rotate_timer.get(), &QTimer::timeout, this, &MainWindow::rotate_timeout);
+		this->rotate_timer->start(10);
+	}
+}
+
+void MainWindow::move_timeout(){
+	auto t = (double)(T::now() - this->move_t0).count() * T::period::num / T::period::den;
+	t /= this->move_duration;
+	if (t >= 1){
+		this->move_by_command(to_QPoint(this->move_dst));
+		this->disconnect(this->move_connection);
+		this->move_timer.reset();
+		return;
+	}
+	auto pos = (QPointF)this->move_src * (1 - t) + (QPointF)this->move_dst * t;
+	this->move_by_command(to_QPoint(pos));
+}
+
+void MainWindow::rotate_timeout(){
+	auto elapsed_seconds = (double)(T::now() - this->rotate_t0).count() * T::period::num / T::period::den;
+	this->set_rotation(this->rotate_rotation0 + this->rotate_speed * elapsed_seconds);
+}

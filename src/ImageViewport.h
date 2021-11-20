@@ -47,12 +47,18 @@ class ImageViewport : public QLabel
 	}
 	void transform_changed();
 public:
+	Quadrangular quad;
+	QMatrix final_transform;
+	
 	explicit ImageViewport(QWidget *parent = 0);
 	void reset_transform(){
 		this->transform.reset();
 	}
 	void set_zoom(double x){
 		this->zoom = x;
+	}
+	double get_zoom() const{
+		return this->zoom;
 	}
 	void rotate(double delta_theta);
 	void override_rotation(double delta_theta);
@@ -72,6 +78,9 @@ public:
 		if (!this->pixmap() && !this->movie())
 			return QSize(800, 600);
 		return this->compute_size(this->image_size);
+	}
+	QSize get_image_size() const{
+		return this->image_size;
 	}
 	QRect get_geometry() const{
 		auto ret = this->geometry();

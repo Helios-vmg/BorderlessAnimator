@@ -109,9 +109,9 @@ void ImageViewerApplication::handle_move(const QStringList &args){
 	auto &y_string = args[4];
 	int x, y;
 	bool xrel, yrel;
-	if (parse_move_string(x, xrel, x_string))
+	if (!parse_move_string(x, xrel, x_string))
 		return;
-	if (parse_move_string(y, yrel, y_string))
+	if (!parse_move_string(y, yrel, y_string))
 		return;
 
 	auto it = this->windows_by_name.find(name);
@@ -127,16 +127,67 @@ void ImageViewerApplication::handle_move(const QStringList &args){
 		pos.setY(pos.y() + y);
 	else
 		pos.setY(y);
-	it->second->move(pos);
+	it->second->move_by_command(pos);
 }
 
-void ImageViewerApplication::handle_rotate(const QStringList &){
+void ImageViewerApplication::handle_rotate(const QStringList &args){
+	if (args.size() < 4)
+		return;
+	auto name = args[2].toStdString();
+	auto &theta_string = args[3];
+	double theta;
+	bool thetarel;
+	if (!parse_rotate_string(theta, thetarel, theta_string))
+		return;
+
+	auto it = this->windows_by_name.find(name);
+	if (it == this->windows_by_name.end())
+		return;
+	auto &window = *it->second;
+	auto rotation = window.get_rotation();
+	if (thetarel)
+		rotation += theta;
+	else
+		rotation = theta;
+	window.set_rotation(rotation);
 }
 
-void ImageViewerApplication::handle_animmove(const QStringList &){
+void ImageViewerApplication::handle_animmove(const QStringList &args){
+	if (args.size() < 6)
+		return;
+	auto name = args[2].toStdString();
+	bool ok;
+	auto x = args[3].toInt(&ok);
+	if (!ok)
+		return;
+	auto y = args[4].toInt(&ok);
+	if (!ok)
+		return;
+	auto speed = args[5].toDouble(&ok);
+	if (!ok)
+		return;
+
+	auto it = this->windows_by_name.find(name);
+	if (it == this->windows_by_name.end())
+		return;
+	auto &window = *it->second;
+	window.anim_move(x, y, speed);
 }
 
-void ImageViewerApplication::handle_animrotate(const QStringList &){
+void ImageViewerApplication::handle_animrotate(const QStringList &args){
+	if (args.size() < 4)
+		return;
+	auto name = args[2].toStdString();
+	bool ok;
+	auto speed = args[3].toDouble(&ok);
+	if (!ok)
+		return;
+
+	auto it = this->windows_by_name.find(name);
+	if (it == this->windows_by_name.end())
+		return;
+	auto &window = *it->second;
+	window.anim_rotate(speed);
 }
 
 void ImageViewerApplication::handle_loadscript(const QStringList &){

@@ -8,18 +8,20 @@ Distributed under a permissive license. See COPYING.txt for details.
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QMainWindow>
-#include <QMouseEvent>
-#include <QDesktopWidget>
 #include "LoadedImage.h"
 #include "DirectoryListing.h"
 #include "ImageViewerApplication.h"
+#include "Misc.h"
+#include "Settings.h"
+#include <QMainWindow>
+#include <QMouseEvent>
+#include <QDesktopWidget>
 #include <QStringList>
 #include <QShortcut>
 #include <vector>
 #include <memory>
-#include "Misc.h"
-#include "Settings.h"
+#include <chrono>
+#include <QTimer>
 
 namespace Ui {
 class MainWindow;
@@ -59,10 +61,9 @@ protected:
 	//QString current_directory,
 	//	current_filename;
 	bool moving_forward;
-	std::vector<std::shared_ptr<QShortcut> > shortcuts;
+	std::vector<std::shared_ptr<QShortcut>> shortcuts;
 	bool not_moved;
 	bool color_calculated;
-	std::vector<QMetaObject::Connection> connections;
 
 	enum class ResizeMode{
 		None        = 0,
@@ -79,6 +80,20 @@ protected:
 
 	std::shared_ptr<WindowState> window_state;
 	std::string name;
+	QPoint origin{};
+	double rotation = 0;
+	
+	QPointF move_src, move_dst;
+	std::chrono::time_point<std::chrono::high_resolution_clock> move_t0;
+	double move_duration;
+	std::unique_ptr<QTimer> move_timer;
+	QMetaObject::Connection move_connection;
+
+	double rotate_rotation0;
+	double rotate_speed;
+	std::chrono::time_point<std::chrono::high_resolution_clock> rotate_t0;
+	std::unique_ptr<QTimer> rotate_timer;
+	QMetaObject::Connection rotate_connection;
 
 	bool move_image(const QPoint &new_position);
 	QPoint compute_movement(const QPoint &new_position, const QPoint &mouse_position);
@@ -138,6 +153,7 @@ protected:
 	void closeEvent(QCloseEvent *event) override;
 	void contextMenuEvent(QContextMenuEvent *) override;
 	//bool event(QEvent *) override;
+	QPointF compute_origin_location() const;
 
 public:
 	explicit MainWindow(ImageViewerApplication &app, const QString &path, QWidget *parent = 0);
@@ -178,8 +194,15 @@ public:
 	const std::string &get_name() const{
 		return this->name;
 	}
+	void move_by_command(const QPoint &);
 	void set_scale(double scale);
 	void set_origin(int x, int y);
+	double get_rotation() const{
+		return this->rotation;
+	}
+	void set_rotation(double theta);
+	void anim_move(int x, int y, double speed);
+	void anim_rotate(double speed);
 
 public slots:
 	void label_transform_updated();
@@ -210,6 +233,8 @@ public slots:
 	void minimize_all_slot();
 	void flip_h();
 	void flip_v();
+	void move_timeout();
+	void rotate_timeout();
 
 signals:
 	void closing(MainWindow *);
