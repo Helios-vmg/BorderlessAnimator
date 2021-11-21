@@ -9,6 +9,7 @@ Distributed under a permissive license. See COPYING.txt for details.
 #include "MainWindow.h"
 #include "Misc.h"
 #include "GenericException.h"
+#include "Script.h"
 #include <QShortcut>
 #include <QMessageBox>
 #include <sstream>
@@ -92,7 +93,10 @@ void ImageViewerApplication::new_instance(const QStringList &args){
 	auto it = this->command_handlers.find(command);
 	if (it == this->command_handlers.end())
 		return;
-	(this->*it->second)(args);
+	try{
+		(this->*it->second)(args);
+	}catch (ParserException &){
+	}
 }
 
 void ImageViewerApplication::window_closing(MainWindow *window){}
@@ -266,5 +270,7 @@ void ImageViewerApplication::setup_command_handlers(){
 	SETUP_COMMAND_HANDLER(rotate);
 	SETUP_COMMAND_HANDLER(animmove);
 	SETUP_COMMAND_HANDLER(animrotate);
+	SETUP_COMMAND_HANDLER(fliph);
+	SETUP_COMMAND_HANDLER(flipv);
 	SETUP_COMMAND_HANDLER(loadscript);
 }

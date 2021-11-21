@@ -60,6 +60,8 @@ class ImageViewerApplication : public SingleInstanceApplication{
 	void handle_rotate(const QStringList &);
 	void handle_animmove(const QStringList &);
 	void handle_animrotate(const QStringList &);
+	void handle_fliph(const QStringList &);
+	void handle_flipv(const QStringList &);
 	void handle_loadscript(const QStringList &);
 
 protected:

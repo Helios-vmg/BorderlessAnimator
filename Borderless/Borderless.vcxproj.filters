@@ -109,10 +109,16 @@
     <ClCompile Include="GeneratedFiles\Release\moc_ImageViewerApplication.cpp">
       <Filter>Generated Files\Release</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\Settings.cpp">
+    <ClCompile Include="$(SolutionDir)\src\CommandHandlers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\CommandHandlers.cpp">
+    <ClCompile Include="$(SolutionDir)\src\Settings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)\src\Script.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)\src\ScriptCommand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -155,7 +161,13 @@
     <ClInclude Include="$(SolutionDir)\src\Enums.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\Settings.h">
+    <ClInclude Include="$(SolutionDir)\src\Script.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="$(SolutionDir)\src\Settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="$(SolutionDir)\src\ScriptCommand.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

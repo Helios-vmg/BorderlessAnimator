@@ -19,12 +19,6 @@ ImageViewport::ImageViewport(std::string &&name, const QSize &size, QWidget *par
 	this->setScaledContents(true);
 }
 
-void ImageViewport::flip(bool hor){
-	auto x = hor ? -1.0 : 1.0;
-	auto y = -x;
-	//TODO
-}
-
 template <typename T>
 typename std::enable_if<std::is_enum<T>::value, T>::type or_flags(const T &a, const T &b){
 	return (T)((unsigned)a | (unsigned)b);
@@ -73,7 +67,7 @@ void ImageViewport::set_image(std::unique_ptr<LoadedGraphics> &&li, const QSize 
 }
 
 QPoint to_QPoint(const QPointF &p){
-	return{ (int)floor(p.x()), (int)floor(p.y()) };
+	return{ (int)round(p.x()), (int)round(p.y()) };
 }
 
 void ImageViewport::move_by_command(const QPointF &p){
@@ -105,55 +99,98 @@ void ImageViewport::set_rotation(double theta){
 
 typedef std::chrono::high_resolution_clock T;
 
-void ImageViewport::anim_move(int x, int y, double speed){
-	this->move_src = this->translation;
-	this->move_dst = QPointF(x, y);
-	auto l = norm(this->move_dst - this->move_src);
-	auto duration = l / speed;
-	this->move_t0 = T::now();
-	this->move_duration = duration;
-	if (this->move_connection)
-		this->disconnect(this->move_connection);
-	this->move_timer = std::make_unique<QTimer>(this);
-	this->move_timer->setTimerType(Qt::PreciseTimer);
-	this->move_connection = connect(this->move_timer.get(), &QTimer::timeout, this, &ImageViewport::move_timeout);
-	this->move_timer->start(10);
+void ImageViewport::anim_move(int x, int y, double speed, std::function<void()> &&f){
+	if (!speed){
+		this->move_animator.reset();
+		this->check_timer();
+		return;
+	}
+	auto duration = norm(QPointF(x, y) - this->translation) / speed;
+	this->move_animator.reset(new MoveAnimator(*this, this->translation, QPointF(x, y), duration, std::move(f)));
+	this->check_timer();
 }
 
 void ImageViewport::anim_rotate(double speed){
 	if (!speed){
-		if (this->rotate_timer){
-			if (this->rotate_connection)
-				this->disconnect(this->rotate_connection);
-			this->rotate_timer.reset();
-		}
+		this->rotate_animator.reset();
+		this->check_timer();
 		return;
 	}
-	this->rotate_rotation0 = this->rotation;
-	this->rotate_speed = speed * (360.0 / 60.0);
-	this->rotate_t0 = T::now();
-	if (!this->rotate_timer){
-		this->rotate_timer = std::make_unique<QTimer>(this);
-		this->rotate_timer->setTimerType(Qt::PreciseTimer);
-		this->rotate_connection = connect(this->rotate_timer.get(), &QTimer::timeout, this, &ImageViewport::rotate_timeout);
-		this->rotate_timer->start(10);
-	}
+	this->rotate_animator.reset(new RotateAnimator(*this, this->rotation, speed * (360.0 / 60.0)));
+	this->check_timer();
 }
 
-void ImageViewport::move_timeout(){
-	auto t = (double)(T::now() - this->move_t0).count() * T::period::num / T::period::den;
-	t /= this->move_duration;
+void ImageViewport::check_timer(){
+	if (!this->move_animator && !this->rotate_animator && !this->script){
+		if (this->timer_connection)
+			this->disconnect(this->timer_connection);
+		this->timer.reset();
+		return;
+	}
+	if (this->timer)
+		return;
+	this->timer = std::make_unique<QTimer>(this);
+	this->timer->setTimerType(Qt::PreciseTimer);
+	this->timer_connection = connect(this->timer.get(), &QTimer::timeout, this, &ImageViewport::timer_timeout);
+	this->timer->start(10);
+}
+
+
+double ImageViewport::Animator::elapsed() const{
+	return (double)(T::now() - this->t0).count() * T::period::num / T::period::den;
+}
+
+bool ImageViewport::MoveAnimator::resume(){
+	auto t = this->elapsed();
+	t /= this->duration;
 	if (t >= 1){
-		this->move_by_command(to_QPoint(this->move_dst));
-		this->disconnect(this->move_connection);
-		this->move_timer.reset();
-		return;
+		this->image->move_by_command(to_QPoint(this->dst));
+		this->active = false;
+		if (this->on_complete)
+			this->on_complete();
+		return false;
 	}
-	auto pos = (QPointF)this->move_src * (1 - t) + (QPointF)this->move_dst * t;
-	this->move_by_command(to_QPoint(pos));
+	auto pos = this->src * (1 - t) + this->dst * t;
+	this->image->move_by_command(to_QPoint(pos));
+	return true;
 }
 
-void ImageViewport::rotate_timeout(){
-	auto elapsed_seconds = (double)(T::now() - this->rotate_t0).count() * T::period::num / T::period::den;
-	this->set_rotation(this->rotate_rotation0 + this->rotate_speed * elapsed_seconds);
+bool ImageViewport::RotateAnimator::resume(){
+	auto elapsed_seconds = this->elapsed();
+	this->image->set_rotation(this->rotation0 + this->speed * elapsed_seconds);
+	return true;
+}
+
+void ImageViewport::fliph(){
+	this->flip_h = !this->flip_h;
+	this->update_transform = true;
+	this->repaint();
+}
+
+void ImageViewport::flipv(){
+	this->flip_v = !this->flip_v;
+	this->update_transform = true;
+	this->repaint();
+}
+
+void ImageViewport::load_script(const QString &path){
+	std::unique_ptr<Script> script;
+	try{
+		script = std::make_unique<Script>(path);
+	}catch (std::exception &e){
+		//TODO: Do something with the error.
+		return;
+	}
+	this->script = std::move(script);
+	this->check_timer();
+}
+
+void ImageViewport::timer_timeout(){
+	if (this->move_animator && !this->move_animator->resume())
+		this->move_animator.reset();
+	if (this->rotate_animator && !this->rotate_animator->resume())
+		this->rotate_animator.reset();
+	if (this->script && !this->script->resume(*this))
+		this->script.reset();
+	this->check_timer();
 }

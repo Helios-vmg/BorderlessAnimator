@@ -132,8 +132,10 @@
     <ClCompile Include="$(SolutionDir)\src\MainWindowSettings.cpp" />
     <ClCompile Include="$(SolutionDir)\src\MainWindowShortcuts.cpp" />
     <ClCompile Include="$(SolutionDir)\src\SingleInstanceApplication.cpp" />
-    <ClCompile Include="..\src\CommandHandlers.cpp" />
-    <ClCompile Include="..\src\Settings.cpp" />
+    <ClCompile Include="$(SolutionDir)\src\CommandHandlers.cpp" />
+    <ClCompile Include="$(SolutionDir)\src\Settings.cpp" />
+    <ClCompile Include="$(SolutionDir)\src\Script.cpp" />
+    <ClCompile Include="$(SolutionDir)\src\ScriptCommand.cpp" />
     <ClCompile Include="GeneratedFiles\DebugRelease\moc_ImageViewerApplication.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -196,8 +198,10 @@
     <ClInclude Include="$(SolutionDir)\src\LoadedImage.h" />
     <ClInclude Include="$(SolutionDir)\src\Misc.h" />
     <ClInclude Include="$(SolutionDir)\src\Enums.h" />
-    <ClInclude Include="..\src\Settings.h" />
+    <ClInclude Include="$(SolutionDir)\src\Script.h" />
+    <ClInclude Include="$(SolutionDir)\src\Settings.h" />
     <ClInclude Include="$(SolutionDir)\src\Quadrangular.h" />
+    <ClInclude Include="$(SolutionDir)\src\ScriptCommand.h" />
     <ClInclude Include="GeneratedFiles\ui_MainWindow.h" />
     <CustomBuild Include="$(SolutionDir)\src\SingleInstanceApplication.h">
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Moc%27ing SingleInstanceApplication.h...</Message>
